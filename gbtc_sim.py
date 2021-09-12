@@ -355,7 +355,6 @@ def compute_intraday_discount():
 def simulate_with_intraday():
     start_date = datetime.date(2021, 3, 1)
     end_date = datetime.date(2021, 8, 29)
-
     intraday_discount = ut.compute_intraday_discount(start_date, end_date)
     intraday_discount['datetime'] = intraday_discount.index
     intraday_discount['date'] = intraday_discount.datetime.apply(lambda dt: dt.date())
@@ -370,6 +369,9 @@ def simulate_with_intraday():
     around_close = intraday_discount[intraday_discount.time >= datetime.time(15, 45)]
     around_close = around_close.groupby('date').discount.mean()
 
+    # around_close.head()
+    # intraday_discount.head()
+    # full_day.head()
     daily_discount = pd.DataFrame(dict(
         around_close=around_close,
         around_open=around_open,
@@ -384,9 +386,16 @@ def simulate_with_intraday():
     daily_discount['around_close_lower'] = daily_discount.around_close_mean - 1 * daily_discount.around_close_std
     daily_discount.index = pd.to_datetime(daily_discount.index)
 
+    daily_discount.head()
+
     trading_days = daily_discount.index.to_list()
 
+    # daily_discount.tail()
+    # daily_discount['2021-07'].plot(kind='bar')
+    # plt.show()
+
     trade_in_days = daily_discount[daily_discount.last_around_close <= daily_discount.around_close_lower].index
+    # trade_in_days
 
     summary = []
     for hold in range(1, 20, 2):
@@ -394,6 +403,14 @@ def simulate_with_intraday():
         for trade_in_date in trade_in_days:
             i = trading_days.index(trade_in_date)
             trade_out_date = trading_days[min(i + hold, len(trading_days) - 1)]
+
+            # print(daily_discount.loc[trade_in_date:trade_out_date])
+
+            # start_trade_in_time = datetime.time(15, 45)
+            # end_trade_in_time = datetime.time(16, 0)
+            #
+            # start_trade_out_time = datetime.time(15, 45)
+            # end_trade_out_time = datetime.time(16)
 
             start_trade_in_time = datetime.time(9, 30)
             end_trade_in_time = datetime.time(9, 45)
@@ -420,3 +437,4 @@ def simulate_with_intraday():
 
     summary = pd.DataFrame(summary)
     print(summary)
+
