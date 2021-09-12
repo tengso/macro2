@@ -10,6 +10,8 @@ import functools as ft
 # Q: August
 # U: Sept
 
+month_range = [3, 4, 5, 6, 7, 8]
+
 symbol_map = {
     3: 'H',
     4: 'J',
@@ -38,7 +40,7 @@ def get_spot_price(month):
         'ignore',
     ]
 
-    spot_path = fr'/Users/song/projects/PycharmProjects/pythonProject/macro/data/BTCUSDT-1m-2021-{month:02}.csv'
+    spot_path = fr'./data/BTCUSDT-1m-2021-{month:02}.csv'
 
     btc_spot = pd.read_csv(spot_path, names=columns)
     btc_spot['open_time'] = btc_spot.open_time.apply(lambda t: datetime.datetime.utcfromtimestamp(t / 1000))
@@ -64,7 +66,7 @@ def get_discount_band(discount, window_size, band_size):
 @ft.lru_cache(maxsize=None)
 def get_official_daily_discount():
     # daily_premium
-    p = r'/Users/song/projects/PycharmProjects/pythonProject/macro/data/grayscale-premium.csv'
+    p = r'./data/grayscale-premium.csv'
     discount = pd.read_csv(p)
     # discount.head()
     discount['timestamp'] = pd.to_datetime(discount['timestamp'])
@@ -76,7 +78,7 @@ def get_official_daily_discount():
 
 @ft.lru_cache(maxsize=None)
 def get_gbtc_intraday_price():
-    path = r'/Users/song/projects/PycharmProjects/pythonProject/macro/data/intraday.xlsx'
+    path = r'./data/intraday.xlsx'
 
     gbtc = pd.read_excel(path, sheet_name='GBTC 1M')
 
@@ -96,7 +98,7 @@ def get_gbtc_intraday_price():
 @ft.lru_cache(maxsize=None)
 def get_future_intraday_price(month):
     # month = 3
-    path = r'/Users/song/projects/PycharmProjects/pythonProject/macro/data/intraday.xlsx'
+    path = r'./data/intraday.xlsx'
 
     code = symbol_map[month]
     btc = pd.read_excel(path, sheet_name=f'BTC{code}1 1M')
@@ -189,6 +191,24 @@ def compute_daily_discount(intraday_discount):
     return daily
 
 
+@ft.lru_cache(maxsize=None)
+def get_all_futures_intraday_prices():
+    global month_range
+    data = {}
+    for month in month_range:
+        # month = 3
+        prices = get_future_intraday_price(month)
+
+        data[f'{month}_close'] = prices['close']
+        data[f'{month}_volume'] = prices['volume']
+
+    data = pd.DataFrame(data)
+    data = data.fillna(0)
+
+    return data
+
+
+@ft.lru_cache(maxsize=None)
 def compute_continuous_futures_pnl(month_range):
     data = {}
     for month in month_range:
@@ -224,4 +244,32 @@ def compute_continuous_futures_pnl(month_range):
         result_pnl[asof] = pnl
 
     return pd.Series(result_ret).sort_index(), pd.Series(result_pnl).sort_index()
+
+
+@ft.lru_cache(maxsize=None)
+def select_contract(month_range):
+    data = {}
+    for month in month_range:
+        # month = 3
+        prices = get_future_intraday_price(month)
+        prices = compute_daily_price(prices)
+        prices.head()
+        data[f'{month}_close'] = prices['close']
+        data[f'{month}_volume'] = prices['volume']
+
+    data = pd.DataFrame(data)
+    data = data.fillna(0)
+
+    volume_cols = [f'{m}_volume' for m in month_range]
+
+    def compute_max_volume_month(volumes):
+        volumes = volumes[volume_cols]
+        # print(volumes)
+        max_month = volumes.max()
+        month = volumes[volumes == max_month].index[0]
+        # print(month, max_month)
+        return int(month.split('_')[0])
+
+    return data.apply(compute_max_volume_month, axis=1)
+
 
