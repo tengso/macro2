@@ -176,10 +176,10 @@ def simulate(all_trades):
 def compute_continuous_futures_pnl():
     month_range = [3, 4, 5, 6, 7, 8]
     ret, pnl = ut.compute_continuous_futures_pnl(month_range)
-    ((1 + ret).cumprod() - 1).plot(title='Cumulative Daily Return')
+    ((1 + ret).cumprod() - 1).plot(title='CME Bitcoin Future Cumulative Daily Return')
     plt.show()
 
-    (pnl * 5).cumsum().plot(title='Cumulative PnL')
+    (pnl * 5).cumsum().plot(title='CME Bitcoin Future Cumulative PnL')
     plt.show()
 
 
@@ -193,14 +193,23 @@ def compute_official_discount_return_regression():
     trades.head()
 
     import statsmodels.api as sm
-    x = trades["discount_diff"]
-    y = trades["total_pnl"]
+    import numpy as np
+    x = np.array(trades["discount_diff"].to_list())
+    y = np.array(trades["total_pnl"].to_list())
+    #m = np.polyfit(x, y, 1)
+    fig = plt.figure()
+    plt.scatter(x, y)
+    fig.suptitle('daily return vs. overnight discount change')
+    plt.ylabel('daily return')
+    plt.xlabel('overnight discount change')
+    plt.show()
     data = pd.DataFrame(dict(x=x, y=y))
     data = data.dropna()
     # Note the difference in argument order
     # X = sm.add_constant(data.x)
     model = sm.OLS(data.y, data.x).fit()
-    model.summary()
+    s = model.summary()
+
     # data.head(40)
     # predictions = model.predict(x) # make the predictions by the model
     # Print out the statistics
@@ -244,6 +253,7 @@ def simulate_with_official_discount():
         # print(asof, pnl.iloc[0], trade_in_discount.iloc[0], trade_out_discount.iloc[0])
 
     summary = pd.DataFrame(summary)
+    summary.to_clipboard()
     print(summary)
 
 
@@ -252,6 +262,7 @@ def compute_intraday_volume():
     month_range = [3, 4, 5, 6, 7, 8]
 
     contracts = ut.select_contract(month_range)
+    # len(contracts)
 
     data = {}
     for month in month_range:
@@ -263,30 +274,33 @@ def compute_intraday_volume():
 
     data = pd.DataFrame(data)
     data = data.fillna(0)
+    # len(data.date.unique())
 
     data['datetime'] = data.index
     data['date'] = data.datetime.apply(lambda dt: dt.date())
     data['contract'] = data.date.apply(lambda d: contracts.get(d))
 
     data = data.dropna()
-    data['active_volume'] = data.apply(lambda d: d[f'{d.contract}_volume'], axis=1)
-    data['active_price'] = data.apply(lambda d: d[f'{d.contract}_close'], axis=1)
-    data['active_notional'] = data.active_volume * data.active_price * 5
 
-    data['2021-03-03'].active_volume.cumsum().plot()
+    data['active_volume'] = data.apply(lambda d: d[f'{int(d.contract)}_volume'], axis=1)
+    data['active_price'] = data.apply(lambda d: d[f'{int(d.contract)}_close'], axis=1)
+    data['active_notional'] = data.active_volume * data.active_price * 5 / 1E6
     data['hour'] = data.datetime.apply(lambda dt: dt.hour)
 
+    data['2021-03-04'].active_notional.cumsum().plot(title='Trading Notional ($Million)')
+    plt.show()
+
     days = len(data.date.unique())
-    futures_hourly_volume = data.groupby('hour').active_notional.sum() / days / 1E6
-    futures_hourly_volume.plot(kind='bar')
+    futures_hourly_volume = data.groupby('hour').active_notional.sum() / days
+    futures_hourly_volume.plot(kind='bar', title='CME BTC Hourly Trading Notional Distribution ($Million)')
     plt.show()
 
     gbtc = ut.get_gbtc_intraday_price()
     days = len(gbtc.date.unique())
     gbtc['notional'] = gbtc.close * gbtc.volume
     gbtc['hour'] = gbtc.time.apply(lambda t: t.hour)
-    gbt_hourly_volume = gbtc.groupby('hour').notional.sum() / days/ 1E6
-    gbt_hourly_volume.plot(kind='bar')
+    gbt_hourly_volume = gbtc.groupby('hour').notional.sum() / days / 1E6
+    gbt_hourly_volume[[9, 10, 11, 12, 13, 14, 15]].plot(kind='bar', title='GBTC Hourly Trading Notional Distribution ($Million)')
     plt.show()
 
 
@@ -311,10 +325,20 @@ def compute_intraday_discount():
     combined.index = pd.to_datetime(combined.index)
     combined['next_open'] = combined.around_open.shift(-1)
 
-    discount_august = combined['2021-08']
-    discount_july = combined['2021-07']
-    discount_june = combined['2021-06']
     discount_may = combined['2021-05']
+    discount_may[['around_open', 'around_close', 'official']].plot(title='GBTC Intraday Discount vs. Official in May 2021 ')
+    plt.show()
+
+    discount_june = combined['2021-06']
+    discount_june[['around_open', 'around_close', 'official']].plot(title='GBTC Intraday Discount vs. Official in June 2021 ')
+
+    discount_july = combined['2021-07']
+    discount_july[['around_open', 'around_close', 'official']].plot(title='GBTC Intraday Discount vs. Official in July 2021 ')
+    plt.show()
+
+    discount_august = combined['2021-08']
+    discount_august[['around_open', 'around_close', 'official']].plot(title='GBTC Intraday Discount vs. Official in August 2021 ')
+    plt.show()
 
     # discount distribution by hour
     daily_mean = discount.groupby('date').discount.mean()
@@ -324,37 +348,89 @@ def compute_intraday_discount():
     discount['demean'] = (discount.discount - discount.daily_mean) / discount.daily_std
     discount['hour'] = discount.time.apply(lambda t: t.hour)
     hourly = discount.groupby('hour').demean.mean()
-    hourly[[9, 10, 11, 12, 13, 14, 15]].plot(kind='bar')
+    hourly[[9, 10, 11, 12, 13, 14, 15]].plot(kind='bar', title='Hourly Discount Z-score Distribution')
     plt.show()
 
     # compare around close vs. next open
     (combined.next_open - combined.around_close).mean()
     (combined.next_open - combined.around_close).std()
 
-    discount_august[['around_close', 'next_open']].plot(kind='bar')
+    d = discount_august[['around_close', 'next_open']]
+    d.index = [dd.date() for dd in d.index.to_list()]
+    d.plot(kind='bar', title='Discount Around Today Close vs. Discount Around Next Open (August)')
     plt.show()
-    discount_july[['around_close', 'next_open']].plot(kind='bar')
-    plt.show()
-    discount_june[['around_close', 'next_open']].plot(kind='bar')
-    plt.show()
-    discount_may[['around_close', 'next_open']].plot(kind='bar')
+
+    d = discount_july[['around_close', 'next_open']]
+    d.index = [dd.date() for dd in d.index.to_list()]
+    d.plot(kind='bar', title='Discount Around Today Close vs. Discount Around Next Open (July)')
     plt.show()
 
     # daily range
     daily_range = discount.groupby('date').discount.max() - discount.groupby('date').discount.min()
     daily_range.index = pd.to_datetime(daily_range.index)
-    daily_range['2021-05'].plot(kind='bar')
+
+    daily_range_may = daily_range['2021-05']
+    daily_range_may.index = [d.date() for d in daily_range_may.index.to_list()]
+    daily_range_may.plot(kind='bar', title='Intraday Max Range (May)')
     plt.show()
-    daily_range['2021-08'].plot(kind='bar')
+
+    daily_range_june = daily_range['2021-06']
+    daily_range_june.index = [d.date() for d in daily_range_june.index.to_list()]
+    daily_range_june.plot(kind='bar', title='Intraday Max Range (June)')
     plt.show()
-    daily_range['2021-07'].plot(kind='bar')
+
+    daily_range_july = daily_range['2021-07']
+    daily_range_july.index = [d.date() for d in daily_range_july.index.to_list()]
+    daily_range_july.plot(kind='bar', title='Intraday Max Range (July)')
     plt.show()
+
+    daily_range_august = daily_range['2021-08']
+    daily_range_august.index = [d.date() for d in daily_range_august.index.to_list()]
+    daily_range_august.plot(kind='bar', title='Intraday Max Range (August)')
+    plt.show()
+
+
+def simulate_pnl(trade_in_days, trade_out_days, daily_discount):
+    result = []
+
+    for i, trade_in_date in enumerate(trade_in_days):
+        trade_out_date = trade_out_days[i]
+
+        # print(daily_discount.loc[trade_in_date:trade_out_date])
+
+        # start_trade_in_time = datetime.time(15, 45)
+        # end_trade_in_time = datetime.time(16, 0)
+        #
+        # start_trade_out_time = datetime.time(15, 45)
+        # end_trade_out_time = datetime.time(16)
+
+        start_trade_in_time = datetime.time(9, 30)
+        end_trade_in_time = datetime.time(9, 45)
+
+        start_trade_out_time = datetime.time(9, 30)
+        end_trade_out_time = datetime.time(9, 45)
+
+        pnl = simulate_intraday(trade_in_date, start_trade_in_time, end_trade_in_time, trade_out_date,
+                                start_trade_out_time, end_trade_out_time)
+        result.append(dict(
+            trade_in_date=trade_in_date,
+            trade_out_date=trade_out_date,
+            pnl=pnl,
+            trade_in_discount=daily_discount.loc[trade_in_date].around_open,
+            trade_out_discount=daily_discount.loc[trade_out_date].around_open,
+        ))
+
+        # print(trade_in_date.date(), trade_out_date.date(), pnl)
+
+    result = pd.DataFrame(result)
+    return result
 
 
 # slide: intraday simulation
 def simulate_with_intraday():
     start_date = datetime.date(2021, 3, 1)
     end_date = datetime.date(2021, 8, 29)
+
     intraday_discount = ut.compute_intraday_discount(start_date, end_date)
     intraday_discount['datetime'] = intraday_discount.index
     intraday_discount['date'] = intraday_discount.datetime.apply(lambda dt: dt.date())
@@ -386,55 +462,61 @@ def simulate_with_intraday():
     daily_discount['around_close_lower'] = daily_discount.around_close_mean - 1 * daily_discount.around_close_std
     daily_discount.index = pd.to_datetime(daily_discount.index)
 
-    daily_discount.head()
-
-    trading_days = daily_discount.index.to_list()
-
-    # daily_discount.tail()
-    # daily_discount['2021-07'].plot(kind='bar')
-    # plt.show()
-
-    trade_in_days = daily_discount[daily_discount.last_around_close <= daily_discount.around_close_lower].index
-    # trade_in_days
-
-    summary = []
-    for hold in range(1, 20, 2):
+    def find_trade_out_days(trade_in_days, trade_out_days):
         result = []
         for trade_in_date in trade_in_days:
-            i = trading_days.index(trade_in_date)
-            trade_out_date = trading_days[min(i + hold, len(trading_days) - 1)]
+            for trade_out_date in trade_out_days:
+                if trade_out_date > trade_in_date:
+                    result.append(trade_out_date)
+                    break
+            else:
+                print(f'not found: {trade_in_date}')
+        return result
 
-            # print(daily_discount.loc[trade_in_date:trade_out_date])
+    def moving_average_strategy():
+        trade_in_days = daily_discount[daily_discount.last_around_close <= daily_discount.around_close_lower].index.to_list()
+        trade_out_days = daily_discount[daily_discount.last_around_close >= daily_discount.around_close_mean].index.to_list()
 
-            # start_trade_in_time = datetime.time(15, 45)
-            # end_trade_in_time = datetime.time(16, 0)
-            #
-            # start_trade_out_time = datetime.time(15, 45)
-            # end_trade_out_time = datetime.time(16)
+        trade_out_days = find_trade_out_days(trade_in_days, trade_out_days)
+        length = min(len(trade_in_days), len(trade_out_days))
 
-            start_trade_in_time = datetime.time(9, 30)
-            end_trade_in_time = datetime.time(9, 45)
+        trade_in_days = trade_in_days[0:length]
+        trade_out_days = trade_out_days[0:length]
+        # trading_days = pd.DataFrame(dict(trade_in=trade_in_days, trade_out=trade_out_days))
 
-            start_trade_out_time = datetime.time(9, 30)
-            end_trade_out_time = datetime.time(9, 45)
-
-            pnl = simulate_intraday(trade_in_date, start_trade_in_time, end_trade_in_time, trade_out_date,
-                                    start_trade_out_time, end_trade_out_time)
-            result.append(dict(
-                trade_in_date=trade_in_date,
-                trade_out_date=trade_out_date,
-                pnl=pnl,
-                trade_in_discount=daily_discount.loc[trade_in_date].around_open,
-                trade_out_discount=daily_discount.loc[trade_out_date].around_open,
-            ))
-
-            # print(trade_in_date.date(), trade_out_date.date(), pnl)
-
-        result = pd.DataFrame(result)
+        result = simulate_pnl(trade_in_days, trade_out_days, daily_discount)
         # print(result)
-        summary.append(dict(hold=hold, pnl=result.pnl.sum()))
-        # result.set_index('trade_out_date').pnl.plot(kind='bar')
+        return result
 
-    summary = pd.DataFrame(summary)
+    def hold_strategy():
+        trading_days = daily_discount.index.to_list()
+        all_trade_in_days = daily_discount[daily_discount.last_around_close <= daily_discount.around_close_lower].index.to_list()
+
+        summary = []
+        for hold in range(2, 15):
+            # hold = 2
+            trade_in_days = []
+            trade_out_days = []
+
+            for trade_in_date in all_trade_in_days:
+                i = trading_days.index(trade_in_date)
+                trade_out_date = trading_days[min(i + hold, len(trading_days) - 1)]
+                trade_in_days.append(trade_in_date)
+                trade_out_days.append(trade_out_date)
+
+            result = simulate_pnl(trade_in_days, trade_out_days, daily_discount)
+            result['hold'] = hold
+            summary.append(result)
+            print(result)
+
+        summary = pd.concat(summary)
+
+        return summary
+
+    summary = moving_average_strategy()
+    summary.to_clipboard()
+
+    summary = hold_strategy()
+    print(summary.groupby('hold').pnl.mean())
     print(summary)
 

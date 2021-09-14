@@ -208,7 +208,6 @@ def get_all_futures_intraday_prices():
     return data
 
 
-@ft.lru_cache(maxsize=None)
 def compute_continuous_futures_pnl(month_range):
     data = {}
     for month in month_range:
@@ -246,14 +245,13 @@ def compute_continuous_futures_pnl(month_range):
     return pd.Series(result_ret).sort_index(), pd.Series(result_pnl).sort_index()
 
 
-@ft.lru_cache(maxsize=None)
 def select_contract(month_range):
     data = {}
     for month in month_range:
         # month = 3
         prices = get_future_intraday_price(month)
         prices = compute_daily_price(prices)
-        prices.head()
+        # prices.head()
         data[f'{month}_close'] = prices['close']
         data[f'{month}_volume'] = prices['volume']
 
