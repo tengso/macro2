@@ -209,7 +209,7 @@ def compute_official_discount_return_regression():
     # X = sm.add_constant(data.x)
     model = sm.OLS(data.y, data.x).fit()
     s = model.summary()
-
+    s
     # data.head(40)
     # predictions = model.predict(x) # make the predictions by the model
     # Print out the statistics
@@ -520,3 +520,19 @@ def simulate_with_intraday():
     print(summary.groupby('hold').pnl.mean())
     print(summary)
 
+
+# slides:
+def compute_gbtc_returns():
+    gbtc_prices = ut.get_gbtc_intraday_price()
+    gbtc_daily_prices = ut.compute_daily_price(gbtc_prices)
+    gbtc_daily_prices.head()
+    gbtc_daily_prices['ret'] = gbtc_daily_prices.close.pct_change()
+    # gbtc_ret = ((gbtc_daily_prices.ret + 1).cumprod() - 1)
+
+    # plt.show()
+
+    month_range = [3, 4, 5, 6, 7, 8]
+    futures_ret, futures_pnl = ut.compute_continuous_futures_pnl(month_range)
+    # futures_ret = ((futures_ret + 1).cumprod() - 1)
+    # futures_ret.plot()
+    # plt.show()

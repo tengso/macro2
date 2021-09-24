@@ -3,7 +3,7 @@ import pyfolio as pf
 
 
 # p = r'C:\Users\steng\PycharmProjects\pythonProject\macro\data\prices.xlsx'
-p = r'/Users/song/projects/PycharmProjects/pythonProject/macro/data/prices.xlsx'
+p = r'./data/prices.xlsx'
 # p = '/Users/song/projects/PycharmProjects/pythonProject/macro/data/prices.xlsx'
 
 # 代码	名称	日期	开盘价(元)	最高价(元)	最低价(元)	收盘价(元)	成交额(百万)	成交量(股)
@@ -13,12 +13,12 @@ eua_columns = ['date', 'close']
 
 
 def read_price(symbol, start_date=None, end_date=None):
-    # symbol = 'Adjusted KRBN'
+    # symbol = 'Adjusted TLT'
     # start_date = '2015-01-01'
     # end_date = '2017-07-01'
 
     prices = pd.read_excel(p, sheet_name=symbol)
-    prices.columns = eua_columns
+    prices.head()
     if len(prices.columns) == len(columns):
         prices.columns = columns
     elif len(prices.columns) == len(bbg_columns):
